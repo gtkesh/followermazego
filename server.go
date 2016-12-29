@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -31,6 +33,51 @@ type Server struct {
 	clientSrv   net.Listener
 
 	done chan struct{}
+}
+
+func StartServer(eventSrcAddr, clientAddr string) (*Server, error) {
+	// start listeners for events and clients.
+	// start the notifier.
+
+	return &Server{}, nil
+}
+
+type handler func(c net.Conn)
+
+// eventSrcHandler returns a handler func which:
+// parses an event.
+// sends it to events channel.
+func eventSrcHandler(eventch chan<- event) handler {
+	return func(conn net.Conn) {
+		scanner := bufio.NewScanner(conn)
+
+		for scanner.Scan() {
+			eventStr := scanner.Text()
+			e, err := parseEvent(eventStr)
+			if err != nil || scanner.Err() != nil {
+				log.Print(err)
+			}
+			eventch <- e
+		}
+	}
+}
+
+type clientConn struct {
+	conn net.Conn
+	ID   int
+}
+
+func clientHandler(clientConnch chan<- clientConn) handler {
+	return func(conn net.Conn) {
+		scanner := bufio.NewScanner(conn)
+		scanner.Scan()
+		clientIDstr := scanner.Text()
+		clientID, err := strconv.Atoi(clientIDstr)
+		if err != nil || scanner.Err() != nil {
+			log.Print(err)
+		}
+		clientConnch <- clientConn{ID: clientID, conn: conn}
+	}
 }
 
 // Parses event string into an event struct.
