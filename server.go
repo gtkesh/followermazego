@@ -36,8 +36,27 @@ type Server struct {
 }
 
 func StartServer(eventSrcAddr, clientAddr string) (*Server, error) {
-	// start listeners for events and clients.
-	// start the notifier.
+
+	done := make(chan struct{}) // used to notify Server goroutines to stop when we're done.
+
+	eventSrcSrv, err := net.Listen("tcp", eventSrcAddr)
+	if err != nil {
+		return nil, err
+	}
+	clientSrv, err := net.Listen("tcp", clientAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: start the notifier.
+
+	// TODO: We will get these from the notifier.
+	eventch := make(chan event)
+	clientConnch := make(chan clientConn)
+
+	// start listeners for events and clients in separate goroutines.
+	go listen(eventSrcSrv, eventSrcHandler(eventch), done)
+	go listen(clientSrv, clientHandler(clientConnch), done)
 
 	return &Server{}, nil
 }
@@ -65,6 +84,29 @@ func eventSrcHandler(eventch chan<- event) handler {
 type clientConn struct {
 	conn net.Conn
 	ID   int
+}
+
+func listen(l net.Listener, h handler, done chan struct{}) {
+	for {
+		// Accept a connection in a goroutine and send it to connCh.
+		connCh := make(chan net.Conn)
+		go func() {
+			conn, err := l.Accept()
+			if err != nil {
+				log.Printf("connection error", err)
+			}
+			connCh <- conn
+		}()
+
+		select {
+		case c := <-connCh:
+			go h(c)
+
+		case <-done:
+			l.Close()
+			return
+		}
+	}
 }
 
 func clientHandler(clientConnch chan<- clientConn) handler {
